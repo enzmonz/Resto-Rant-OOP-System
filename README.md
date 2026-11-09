@@ -60,17 +60,6 @@ To stop the app, go back to PowerShell and press **Ctrl + C**.
 
 Your data (accounts, bookings) is saved in `backend/.local/` on your own computer and stays there between restarts. Each groupmate has their own separate data.
 
-### Mac / Linux
-
-```bash
-cd backend
-export SEED_ADMIN_EMAIL='admin@restorant.local'
-export SEED_ADMIN_PASSWORD='choose-a-password-here'
-sh mvnw spring-boot:run -Dspring-boot.run.profiles=demo
-```
-
-Then open http://127.0.0.1:8080. You only need the two `export` lines the first time.
-
 ---
 
 ## Troubleshooting
@@ -158,7 +147,7 @@ Then open http://127.0.0.1:8080. You only need the two `export` lines the first 
 ```text
 Resto Rant/
 ├── backend/
-│   ├── mvnw, mvnw.cmd          Maven Wrapper (downloads Maven automatically)
+│   ├── mvnw.cmd                Maven Wrapper (downloads Maven automatically)
 │   ├── pom.xml                 Build settings and libraries
 │   └── src/
 │       ├── main/
@@ -191,7 +180,7 @@ The build packages the `frontend/` folder into the backend, so the website and t
 
 ## Running Commands
 
-All commands are run from the project folder on Windows. (On Mac/Linux, `cd backend` and use `sh mvnw ...` instead.)
+All commands are run in PowerShell from the project folder.
 
 | Command | What it does |
 |---|---|
