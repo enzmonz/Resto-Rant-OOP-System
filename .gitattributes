@@ -1,0 +1,6 @@
+# Keep shell scripts in Unix format and Windows scripts in Windows format,
+# so they run on every groupmate's machine.
+*.sh       text eol=lf
+mvnw       text eol=lf
+*.cmd      text eol=crlf
+*.ps1      text eol=crlf

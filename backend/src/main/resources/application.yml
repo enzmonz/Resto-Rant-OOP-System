@@ -1,0 +1,48 @@
+spring:
+  application:
+    name: resto-rant
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/resto_rant?sslMode=REQUIRED&connectionTimeZone=UTC}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 10
+      connection-timeout: 10000
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    user: ${DB_MIGRATION_USERNAME:${DB_USERNAME}}
+    password: ${DB_MIGRATION_PASSWORD:${DB_PASSWORD}}
+  sql:
+    init:
+      mode: never
+
+server:
+  address: ${SERVER_ADDRESS:127.0.0.1}
+  servlet:
+    session:
+      timeout: 30m
+      cookie:
+        http-only: true
+        same-site: lax
+        secure: ${COOKIE_SECURE:false}
+  port: ${SERVER_PORT:8080}
+  error:
+    include-message: never
+    include-stacktrace: never
+    include-binding-errors: never
+
+restaurant:
+  zone: ${RESTAURANT_ZONE:Asia/Manila}
+  opening: ${RESTAURANT_OPENING:11:00}
+  closing: ${RESTAURANT_CLOSING:22:00}
+  duration-minutes: ${RESERVATION_DURATION:120}
+  slot-minutes: 30
+  max-guests: 12
+  cancellation-hours: 2
