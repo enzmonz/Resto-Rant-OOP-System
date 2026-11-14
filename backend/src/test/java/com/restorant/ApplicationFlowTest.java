@@ -141,6 +141,31 @@ class ApplicationFlowTest {
         mvc.perform(post("/api/inquiries").with(csrf()).contentType("application/json").content(json.writeValueAsString(new Api.InquiryInput("Visitor","visitor@example.com","09171234567","Is parking available?")))).andExpect(status().isCreated());
         mvc.perform(get("/api/admin/inquiries").with(user("manager").roles("ADMIN"))).andExpect(status().isOk()).andExpect(jsonPath("$[0].message").value("Is parking available?"));
     }
+    @Test void adminsCanListStaffAccounts() throws Exception {
+        users.save(new Admin("Manager","manager@example.com","09171230000",encoder.encode(password)));
+        mvc.perform(get("/api/admin/accounts").with(user("alex@example.com").roles("CUSTOMER"))).andExpect(status().isForbidden());
+        mvc.perform(get("/api/admin/accounts").with(user("manager").roles("ADMIN"))).andExpect(status().isOk())
+            .andExpect(jsonPath("$.length()").value(1)).andExpect(jsonPath("$[0].email").value("manager@example.com"));
+    }
+    private Api.Booking stay(LocalTime time,Integer minutes) {
+        return new Api.Booking(LocalDate.now(clock).plusDays(2),time,4,"09171234567",null,List.of(),List.of(),true,minutes);
+    }
+    @Test void guestsChooseTheirLengthOfStay() {
+        var r=service.create("alex@example.com",stay(LocalTime.NOON,60));
+        assertThat(r.endsAt()).isEqualTo(r.startsAt().plusMinutes(60));
+        // The one-hour booking frees the table at 1 PM.
+        assertThat(service.create("jamie@example.com",stay(LocalTime.of(13,0),180)).endsAt().toLocalTime()).isEqualTo(LocalTime.of(16,0));
+        assertThatThrownBy(()->service.create("alex@example.com",stay(LocalTime.of(17,0),45))).hasMessageContaining("length of stay");
+        // A three-hour stay must end by the 10 PM closing time, so 8 PM is not offered.
+        assertThat(service.availability(LocalDate.now(clock).plusDays(3),2,180)).noneMatch(s->s.time().equals(LocalTime.of(20,0)));
+        assertThat(service.availability(LocalDate.now(clock).plusDays(3),2,60)).anyMatch(s->s.time().equals(LocalTime.of(21,0)));
+    }
+    @Test void phoneNumbersAndFarFutureDatesAreRejected() throws Exception {
+        var badPhone=new Api.Register("Sam","sam@example.com","12345abc",password,password);
+        mvc.perform(post("/api/auth/register").with(csrf()).contentType("application/json").content(json.writeValueAsString(badPhone))).andExpect(status().isBadRequest());
+        var farAway=new Api.Booking(LocalDate.now(clock).plusDays(400),LocalTime.NOON,2,"09171234567",null);
+        assertThatThrownBy(()->service.create("alex@example.com",farAway)).hasMessageContaining("days ahead");
+    }
     @Test void alternativeDatesFindNextAvailableDays() {
         assertThat(bookingService.alternatives(LocalDate.now(clock).plusDays(2),4)).hasSize(3);
     }

@@ -10,7 +10,10 @@ public interface ReservationService {
     List<Api.BookingView> mine(String email);
     Api.BookingView detail(String email, Long id);
     Api.BookingView cancel(String email, Long id);
-    List<Api.Slot> availability(LocalDate date, int guests);
+    /** Seating times for a party, using the given length of stay in minutes (null = restaurant default). */
+    List<Api.Slot> availability(LocalDate date, int guests, Integer durationMinutes);
+    default List<Api.Slot> availability(LocalDate date, int guests) { return availability(date, guests, null); }
+    List<Integer> stayOptions();
     List<Api.BookingView> search(LocalDate date, Reservation.Status status, String query, Long customerId);
     Api.BookingView changeStatus(Long id, Reservation.Status status);
 }

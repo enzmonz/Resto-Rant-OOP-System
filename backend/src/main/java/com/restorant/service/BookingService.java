@@ -26,20 +26,37 @@ public class BookingService implements ReservationService {
         this.reservations=reservations; this.tables=tables; this.accounts=accounts; this.mutex=mutex; this.settings=settings; this.clock=clock;
         this.planner=planner;this.deposit=deposit;
     }
-    private LocalDateTime validate(LocalDate date, LocalTime time, int guests) {
+    /** Lengths of stay a guest may choose, in minutes. */
+    public static final List<Integer> STAY_OPTIONS = List.of(60, 90, 120, 150, 180);
+    /** How far ahead a reservation may be made. */
+    public static final int MAX_DAYS_AHEAD = 365;
+    /** Returns the requested length of stay, or the restaurant default when none was chosen. */
+    public int stay(Integer requested) {
+        if (requested == null) return settings.durationMinutes();
+        if (!STAY_OPTIONS.contains(requested)) throw new ApiException(400, "Choose a length of stay between 1 and 3 hours");
+        return requested;
+    }
+    public List<Integer> stayOptions() { return STAY_OPTIONS; }
+    private void checkDate(LocalDate date) {
+        if (date != null && date.isAfter(LocalDate.now(clock).plusDays(MAX_DAYS_AHEAD)))
+            throw new ApiException(400, "Reservations can be made up to " + MAX_DAYS_AHEAD + " days ahead");
+    }
+    private LocalDateTime validate(LocalDate date, LocalTime time, int guests, int minutes) {
         if (date == null || time == null || guests < 1 || guests > settings.maxGuests()) throw new ApiException(400, "Choose a date, time and 1–" + settings.maxGuests() + " guests");
+        checkDate(date);
         var start = LocalDateTime.of(date, time);
         long offset = Duration.between(settings.opening(), time).toMinutes();
         if (!start.isAfter(LocalDateTime.now(clock))) throw new ApiException(400, "Choose a future reservation time");
-        if (time.isBefore(settings.opening()) || start.plusMinutes(settings.durationMinutes()).isAfter(date.atTime(settings.closing()))
+        if (time.isBefore(settings.opening()) || start.plusMinutes(minutes).isAfter(date.atTime(settings.closing()))
             || offset % settings.slotMinutes() != 0 || time.getSecond() != 0 || time.getNano() != 0)
             throw new ApiException(400, "Choose one of the available seating times within opening hours");
         return start;
     }
     @Override @Transactional(isolation = Isolation.READ_COMMITTED)
     public Api.BookingView create(String email, Api.Booking input) {
-        var start = validate(input.date(), input.time(), input.guestCount());
-        var end = start.plusMinutes(settings.durationMinutes());
+        int minutes = stay(input.durationMinutes());
+        var start = validate(input.date(), input.time(), input.guestCount(), minutes);
+        var end = start.plusMinutes(minutes);
         var user = accounts.require(email);
         if (!(user instanceof Customer customer)) throw new ApiException(403, "Reservations require a customer account");
         mutex.acquire();
@@ -102,15 +119,16 @@ public class BookingService implements ReservationService {
         if(selected.isEmpty() || selected.stream().mapToInt(RestaurantTable::getCapacity).sum()<input.guestCount())throw new ApiException(409,"That seating time just filled up, or the selected tables have too few seats.");
         return selected;
     }
-    public List<Api.TableView> seating(LocalDate date,LocalTime time,int guests) {
-        var start=validate(date,time,guests);var busy=occupied(start,start.plusMinutes(settings.durationMinutes()),null);
+    public List<Api.TableView> seating(LocalDate date,LocalTime time,int guests,Integer duration) {
+        int minutes=stay(duration);var start=validate(date,time,guests,minutes);var busy=occupied(start,start.plusMinutes(minutes),null);
         var available=free(busy).stream().map(RestaurantTable::getId).toList();
         return tables.findAllByOrderByCapacityAscIdAsc().stream().filter(RestaurantTable::isEnabled)
             .map(t->new Api.TableView(t.getId(),t.getTableNumber(),t.getCapacity(),true,available.contains(t.getId()))).toList();
     }
-    public List<LocalDate> alternatives(LocalDate date,int guests) {
-        var dates=new ArrayList<LocalDate>();
-        for(int day=1;day<=30 && dates.size()<3;day++){var candidate=date.plusDays(day);if(availability(candidate,guests).stream().anyMatch(s->s.availableTables()>0))dates.add(candidate);}
+    public List<LocalDate> alternatives(LocalDate date,int guests) { return alternatives(date,guests,null); }
+    public List<LocalDate> alternatives(LocalDate date,int guests,Integer duration) {
+        var dates=new ArrayList<LocalDate>();var last=LocalDate.now(clock).plusDays(MAX_DAYS_AHEAD);
+        for(int day=1;day<=30 && dates.size()<3 && !date.plusDays(day).isAfter(last);day++){var candidate=date.plusDays(day);if(availability(candidate,guests,duration).stream().anyMatch(s->s.availableTables()>0))dates.add(candidate);}
         return dates;
     }
     @Transactional(isolation=Isolation.READ_COMMITTED)
@@ -121,7 +139,10 @@ public class BookingService implements ReservationService {
     public Api.BookingView refund(Long id,String note) { mutex.acquire();var r=require(id);r.recordRefund(note);return view(r); }
     @Transactional(isolation=Isolation.READ_COMMITTED)
     public Api.BookingView edit(Long id,Api.Booking input) {
-        mutex.acquire();var r=require(id);var start=validate(input.date(),input.time(),input.guestCount());var end=start.plusMinutes(settings.durationMinutes());
+        mutex.acquire();var r=require(id);
+        // Staff edits keep the booking's current length of stay unless a new one is chosen.
+        int minutes=input.durationMinutes()==null?(int)Duration.between(r.getStartsAt(),r.getEndsAt()).toMinutes():stay(input.durationMinutes());
+        var start=validate(input.date(),input.time(),input.guestCount(),minutes);var end=start.plusMinutes(minutes);
         if(input.guestCount()!=r.getGuestCount())throw new ApiException(409,"Guest count changes require a replacement reservation so the deposit stays correct");
         r.assign(allocate(input,start,end,id),input.guestCount(),start,end,input.specialRequests());r.setContactNumber(input.contactNumber());r.setGuestNeeds(needs(input));return view(r);
     }
@@ -139,12 +160,16 @@ public class BookingService implements ReservationService {
         if (!view(r).cancellable()) throw new ApiException(409, "Cancellation is available until " + settings.cancellationHours() + " hours before your reservation");
         r.cancel(); return view(r);
     }
-    @Override public List<Api.Slot> availability(LocalDate date, int guests) {
+    // Declared here (not only as the interface default) so the class-level @Transactional applies.
+    @Override public List<Api.Slot> availability(LocalDate date, int guests) { return availability(date, guests, null); }
+    @Override public List<Api.Slot> availability(LocalDate date, int guests, Integer duration) {
         if (date == null || date.isBefore(LocalDate.now(clock)) || guests < 1 || guests > settings.maxGuests()) throw new ApiException(400, "Choose a current or future date and a valid party size");
+        checkDate(date);
+        int minutes = stay(duration);
         var result = new ArrayList<Api.Slot>();
-        for (var start = date.atTime(settings.opening()); !start.plusMinutes(settings.durationMinutes()).isAfter(date.atTime(settings.closing())); start = start.plusMinutes(settings.slotMinutes())) {
+        for (var start = date.atTime(settings.opening()); !start.plusMinutes(minutes).isAfter(date.atTime(settings.closing())); start = start.plusMinutes(settings.slotMinutes())) {
             if (!start.isAfter(LocalDateTime.now(clock))) continue;
-            var end=start.plusMinutes(settings.durationMinutes());var busy=occupied(start,end,null);var available=free(busy);
+            var end=start.plusMinutes(minutes);var busy=occupied(start,end,null);var available=free(busy);
             int seats=Math.min(planner.remainingCapacity(busy,start,end),available.stream().mapToInt(RestaurantTable::getCapacity).sum());
             result.add(new Api.Slot(start.toLocalTime(),seats>=guests?available.size():0,seats));
         }

@@ -21,8 +21,8 @@ public class UpdatesController {
     @PostMapping("/reservations/{id}/demo-payment")
     public Api.BookingView demoPayment(Principal user,@PathVariable Long id){return bookings.demoPayment(user.getName(),id);}
     @PutMapping("/admin/deposit-policy") public DepositPolicy.View policy(@Valid @RequestBody Api.DepositInput input){deposit.configure(input.amount(),input.method(),input.perPerson());return deposit.snapshot();}
-    @GetMapping("/availability/tables") public List<Api.TableView> seating(@RequestParam LocalDate date,@RequestParam LocalTime time,@RequestParam int guests){return bookings.seating(date,time,guests);}
-    @GetMapping("/availability/dates") public List<LocalDate> dates(@RequestParam LocalDate date,@RequestParam int guests){return bookings.alternatives(date,guests);}
+    @GetMapping("/availability/tables") public List<Api.TableView> seating(@RequestParam LocalDate date,@RequestParam LocalTime time,@RequestParam int guests,@RequestParam(required=false) Integer duration){return bookings.seating(date,time,guests,duration);}
+    @GetMapping("/availability/dates") public List<LocalDate> dates(@RequestParam LocalDate date,@RequestParam int guests,@RequestParam(required=false) Integer duration){return bookings.alternatives(date,guests,duration);}
     @PostMapping("/reservations/{id}/payment") public Api.BookingView payment(Principal user,@PathVariable Long id,@Valid @RequestBody Api.Payment input){return bookings.submitPayment(user.getName(),id,input.reference());}
     @PutMapping("/admin/reservations/{id}/payment") public Api.BookingView review(@PathVariable Long id,@Valid @RequestBody Api.PaymentReview input){return bookings.reviewPayment(id,input);}
     @PutMapping("/admin/reservations/{id}/refund") public Api.BookingView refund(@PathVariable Long id,@Valid @RequestBody Api.Payment input){return bookings.refund(id,input.reference());}
@@ -31,6 +31,7 @@ public class UpdatesController {
     public Api.BookingView create(@PathVariable Long id,@Valid @RequestBody Api.Booking input){return bookings.create(accounts.customer(id).getEmail(),input);}
     @DeleteMapping("/admin/reservations/{id}") public Api.BookingView cancel(@PathVariable Long id){return bookings.changeStatus(id,com.restorant.entity.Reservation.Status.CANCELLED);}
     @PostMapping("/admin/accounts") @ResponseStatus(HttpStatus.CREATED) public Api.Account admin(@Valid @RequestBody Api.Register input){return accounts.registerAdmin(input);}
+    @GetMapping("/admin/accounts") public List<Api.Account> staff(){return accounts.staff();}
     @PostMapping("/admin/customers") @ResponseStatus(HttpStatus.CREATED) public Api.Account customer(@Valid @RequestBody Api.Register input){return accounts.register(input);}
     @PutMapping("/admin/customers/{id}") public Api.Account customer(@PathVariable Long id,@Valid @RequestBody Api.Profile input){return accounts.updateCustomer(id,input);}
     @DeleteMapping("/admin/customers/{id}") @ResponseStatus(HttpStatus.NO_CONTENT) public void disable(@PathVariable Long id){accounts.disableCustomer(id);}

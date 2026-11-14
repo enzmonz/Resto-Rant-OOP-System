@@ -15,8 +15,12 @@ public class ReservationController {
     private final RestaurantSettings settings;
     private final Clock clock;
     public ReservationController(ReservationService service,RestaurantSettings settings,Clock clock) { this.service=service; this.settings=settings; this.clock=clock; }
-    @GetMapping("/info") public Map<String,Object> info() { return Map.of("settings",settings,"today",LocalDate.now(clock),"now",LocalDateTime.now(clock)); }
-    @GetMapping("/availability") public List<Api.Slot> availability(@RequestParam LocalDate date,@RequestParam int guests) { return service.availability(date,guests); }
+    @GetMapping("/info") public Map<String,Object> info() {
+        var today=LocalDate.now(clock);
+        return Map.of("settings",settings,"today",today,"now",LocalDateTime.now(clock),
+            "stayOptions",service.stayOptions(),"lastBookableDate",today.plusDays(com.restorant.service.BookingService.MAX_DAYS_AHEAD));
+    }
+    @GetMapping("/availability") public List<Api.Slot> availability(@RequestParam LocalDate date,@RequestParam int guests,@RequestParam(required=false) Integer duration) { return service.availability(date,guests,duration); }
     @PostMapping("/reservations") @ResponseStatus(HttpStatus.CREATED)
     public Api.BookingView create(Principal user,@Valid @RequestBody Api.Booking input) { return service.create(user.getName(),input); }
     @GetMapping("/reservations/my") public List<Api.BookingView> mine(Principal user) { return service.mine(user.getName()); }

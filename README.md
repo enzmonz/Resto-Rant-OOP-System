@@ -295,7 +295,9 @@ Slot spacing, maximum party size, and cancellation cutoff are in `backend/src/ma
 
 - Reservations must fall within restaurant operating hours.
 - Each reservation is assigned the smallest available table that fits the party.
-- Reservations use configurable seating durations.
+- Guests choose how long they will stay: 1, 1½, 2, 2½, or 3 hours (2 hours if none is chosen). The stay must end by closing time.
+- Reservations can be made up to 365 days ahead.
+- Phone numbers must be Philippine mobile numbers: `09XXXXXXXXX` or `+639XXXXXXXXX`.
 - Back-to-back reservations on the same table are allowed.
 - Pending and confirmed reservations occupy their assigned tables.
 - Customers can cancel up to two hours before the reservation starts.
