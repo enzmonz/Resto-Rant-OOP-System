@@ -45,8 +45,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\run-backend.ps1 demo
 
 What happens:
 
-- **The first run takes a few minutes.** It downloads Maven and the libraries the project needs. Later runs are much faster.
-- **A login box pops up** asking you to choose the **admin email and password** (password must be at least 10 characters). Remember them, because this is how you log in to the admin dashboard. On later runs, press **Cancel**: the admin account is already saved.
+- **The first run can take several minutes.** The wrapper downloads Maven, then Maven downloads the project's dependencies. Keep PowerShell open while this runs; later starts are faster. If no new output appears for more than 5 minutes, see [Troubleshooting](#troubleshooting).
+- **A login box pops up** asking you to choose the **admin email and password** (password must be at least 10 characters). Save them somewhere safe; this is how you log in to the admin dashboard. On later runs, press **Cancel**: the admin account is already saved.
 - When you see `Started RestoRantApplication`, the app is ready.
 
 ### 4. Open it
@@ -72,10 +72,24 @@ Your data (accounts, bookings) is saved in `backend/.local/` on your own compute
 | `java -version` shows `1.8` | An old Java is first on your PATH. That's OK as long as JAVA_HOME points to Java 21; the script uses JAVA_HOME. |
 | `running scripts is disabled on this system` | Use the full command from step 3 (`powershell -NoProfile -ExecutionPolicy Bypass -File ...`). |
 | `Port 8080 was already in use` | Another program (or a second copy of the app) is using it. Close it, or run `$env:SERVER_PORT = '8081'` first and open http://127.0.0.1:8081 instead. |
-| Forgot the admin password | Stop the app, delete the `backend/.local` folder, and start again. **This deletes all your local accounts and bookings.** |
+| Forgot the admin password | Stop the app, then follow [Reset the demo database](#reset-the-demo-database). This deletes all local accounts and bookings. |
 | "No tables are available" | Bookings last 2 hours and the restaurant closes at 10 PM, so late in the day there are no slots left today. Pick tomorrow's date. |
 | My HTML/CSS/JS changes don't show | Stop the app (Ctrl + C) and start it again. The frontend is packaged when the app starts. Then hard-refresh the browser (Ctrl + F5). |
 | First run fails while downloading | Check your internet connection and run the command again. |
+| Startup seems stuck | The first start downloads Maven dependencies. Wait a few minutes and watch for new output. If there is no new output after 5 minutes, copy the last lines from PowerShell and check your internet connection. Do not delete `backend/.local` unless you intend to reset the demo data. |
+
+### Reset the demo database
+
+Use this if you forgot the admin password or want a clean demo database. Stop the app first with **Ctrl + C**. This removes **all local accounts, reservations, and demo settings**; it cannot be undone. If you want to keep a backup, copy `backend/.local/` somewhere safe before continuing.
+
+In PowerShell opened in the project folder, run:
+
+```powershell
+Remove-Item -Recurse -Force .\backend\.local
+powershell -NoProfile -ExecutionPolicy Bypass -File .\run-backend.ps1 demo
+```
+
+When prompted, create a new admin email and password (at least 10 characters). Wait for `Started RestoRantApplication`, then open http://127.0.0.1:8080. The app recreates the database and demo tables on startup.
 
 ---
 
