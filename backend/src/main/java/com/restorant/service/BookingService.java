@@ -1,5 +1,6 @@
 package com.restorant.service;
 import com.restorant.config.RestaurantSettings;
+import com.restorant.config.DepositPolicy;
 import com.restorant.dto.Api;
 import com.restorant.entity.*;
 import com.restorant.exception.ApiException;
@@ -18,9 +19,12 @@ public class BookingService implements ReservationService {
     private final BookingMutex mutex;
     private final RestaurantSettings settings;
     private final Clock clock;
+    private final SeatingPlanner planner;
+    private final DepositPolicy deposit;
     public BookingService(ReservationRepository reservations, TableRepository tables, AccountService accounts,
-                          BookingMutex mutex, RestaurantSettings settings, Clock clock) {
+                          BookingMutex mutex, RestaurantSettings settings, Clock clock,SeatingPlanner planner,DepositPolicy deposit) {
         this.reservations=reservations; this.tables=tables; this.accounts=accounts; this.mutex=mutex; this.settings=settings; this.clock=clock;
+        this.planner=planner;this.deposit=deposit;
     }
     private LocalDateTime validate(LocalDate date, LocalTime time, int guests) {
         if (date == null || time == null || guests < 1 || guests > settings.maxGuests()) throw new ApiException(400, "Choose a date, time and 1–" + settings.maxGuests() + " guests");
@@ -40,14 +44,87 @@ public class BookingService implements ReservationService {
         if (!(user instanceof Customer customer)) throw new ApiException(403, "Reservations require a customer account");
         mutex.acquire();
         // All booking and table mutations share this lock. READ_COMMITTED sees the previous holder's commit.
-        var table = tables.findAllByOrderByCapacityAscIdAsc().stream().filter(t -> t.accommodates(input.guestCount()))
-            .filter(t -> reservations.overlaps(t.getId(), start, end, ACTIVE) == 0).findFirst()
-            .orElseThrow(() -> new ApiException(409, "That seating time just filled up. Please choose another time."));
-        var reservation = new Reservation(customer, table, start, end, input.guestCount(), input.specialRequests(), clock);
+        if(!input.depositAccepted())throw new ApiException(400,"Please accept the deposit policy");
+        if(deposit.getAmount().signum()<=0)throw new ApiException(503,"The restaurant has not configured its deposit policy yet. Please contact us.");
+        var selected=allocate(input,start,end,null);
+        var reservation = new Reservation(customer, selected, start, end, input.guestCount(), input.specialRequests(), clock);
         reservation.setContactNumber(input.contactNumber());
+        reservation.setGuestNeeds(needs(input));reservation.requireDeposit(deposit.total(input.guestCount()));
         return view(reservations.saveAndFlush(reservation));
     }
     public Api.BookingView view(Reservation r) { return Api.BookingView.of(r, clock, settings.cancellationHours()); }
+    @Transactional(isolation=Isolation.READ_COMMITTED)
+    public Api.BookingView demoCheckout(String email,Api.DemoCheckout input) {
+        mutex.acquire();
+        String reference="GCASH-DEMO-"+input.checkoutId();
+        var existing=reservations.findByPaymentReference(reference);
+        if(existing.isPresent())return view(owned(email,existing.get().getId()));
+        if(deposit.total(input.booking().guestCount()).compareTo(input.expectedAmount())!=0)
+            throw new ApiException(409,"The deposit changed. Refresh the reservation page and review the new total.");
+        var created=create(email,input.booking());
+        return completeDemoPayment(require(created.id()),reference);
+    }
+    @Transactional(isolation=Isolation.READ_COMMITTED)
+    public Api.BookingView demoPayment(String email,Long id) {
+        mutex.acquire();var r=owned(email,id);
+        if(r.getDepositStatus().equals("VERIFIED"))return view(r);
+        return completeDemoPayment(r,"GCASH-DEMO-"+UUID.randomUUID());
+    }
+    private Api.BookingView completeDemoPayment(Reservation r,String reference) {
+        r.submitPayment(reference);
+        r.reviewPayment(true,"Automatically verified SIMULATED GCash payment. No real money transferred.");
+        return view(r);
+    }
+    private String needs(Api.Booking input) {
+        var allowed=Set.of("Wheelchair access","Baby/high chair","Parking space","Special occasion","Quiet area","Other assistance");
+        var values=input.guestNeeds()==null?List.<String>of():input.guestNeeds();
+        if(values.stream().anyMatch(n->!allowed.contains(n)))throw new ApiException(400,"Unknown guest assistance request");
+        return String.join(", ",new LinkedHashSet<>(values));
+    }
+    private List<Reservation> occupied(LocalDateTime start,LocalDateTime end,Long excluded) {
+        return reservations.activeDuring(start,end,ACTIVE).stream().filter(r->!Objects.equals(r.getId(),excluded)).toList();
+    }
+    private List<RestaurantTable> free(List<Reservation> busy) {
+        var ids=new HashSet<Long>();for(var r:busy)for(var t:r.getAssignedTables())ids.add(t.getId());
+        return tables.findAllByOrderByCapacityAscIdAsc().stream().filter(RestaurantTable::isEnabled).filter(t->!ids.contains(t.getId())).toList();
+    }
+    private List<RestaurantTable> allocate(Api.Booking input,LocalDateTime start,LocalDateTime end,Long excluded) {
+        var busy=occupied(start,end,excluded);var available=free(busy);
+        if(planner.remainingCapacity(busy,start,end)<input.guestCount())throw new ApiException(409,"The 100-person capacity is reached for this seating time");
+        var requested=input.tableIds()==null?List.<Long>of():input.tableIds();
+        List<RestaurantTable> selected;
+        if(requested.isEmpty())selected=planner.bestFit(available,input.guestCount());
+        else {
+            if(new HashSet<>(requested).size()!=requested.size())throw new ApiException(400,"Select each table only once");
+            selected=available.stream().filter(t->requested.contains(t.getId())).toList();
+            if(selected.size()!=requested.size())throw new ApiException(409,"A selected table is already reserved or disabled. Please choose again.");
+        }
+        if(selected.isEmpty() || selected.stream().mapToInt(RestaurantTable::getCapacity).sum()<input.guestCount())throw new ApiException(409,"That seating time just filled up, or the selected tables have too few seats.");
+        return selected;
+    }
+    public List<Api.TableView> seating(LocalDate date,LocalTime time,int guests) {
+        var start=validate(date,time,guests);var busy=occupied(start,start.plusMinutes(settings.durationMinutes()),null);
+        var available=free(busy).stream().map(RestaurantTable::getId).toList();
+        return tables.findAllByOrderByCapacityAscIdAsc().stream().filter(RestaurantTable::isEnabled)
+            .map(t->new Api.TableView(t.getId(),t.getTableNumber(),t.getCapacity(),true,available.contains(t.getId()))).toList();
+    }
+    public List<LocalDate> alternatives(LocalDate date,int guests) {
+        var dates=new ArrayList<LocalDate>();
+        for(int day=1;day<=30 && dates.size()<3;day++){var candidate=date.plusDays(day);if(availability(candidate,guests).stream().anyMatch(s->s.availableTables()>0))dates.add(candidate);}
+        return dates;
+    }
+    @Transactional(isolation=Isolation.READ_COMMITTED)
+    public Api.BookingView submitPayment(String email,Long id,String reference) { mutex.acquire();var r=owned(email,id);r.submitPayment(reference);return view(r); }
+    @Transactional(isolation=Isolation.READ_COMMITTED)
+    public Api.BookingView reviewPayment(Long id,Api.PaymentReview review) { mutex.acquire();var r=require(id);r.reviewPayment(review.accepted(),review.note());return view(r); }
+    @Transactional(isolation=Isolation.READ_COMMITTED)
+    public Api.BookingView refund(Long id,String note) { mutex.acquire();var r=require(id);r.recordRefund(note);return view(r); }
+    @Transactional(isolation=Isolation.READ_COMMITTED)
+    public Api.BookingView edit(Long id,Api.Booking input) {
+        mutex.acquire();var r=require(id);var start=validate(input.date(),input.time(),input.guestCount());var end=start.plusMinutes(settings.durationMinutes());
+        if(input.guestCount()!=r.getGuestCount())throw new ApiException(409,"Guest count changes require a replacement reservation so the deposit stays correct");
+        r.assign(allocate(input,start,end,id),input.guestCount(),start,end,input.specialRequests());r.setContactNumber(input.contactNumber());r.setGuestNeeds(needs(input));return view(r);
+    }
     private Reservation require(Long id) { return reservations.findById(id).orElseThrow(() -> new ApiException(404, "Reservation not found")); }
     private Reservation owned(String email, Long id) {
         var r = require(id);
@@ -65,12 +142,11 @@ public class BookingService implements ReservationService {
     @Override public List<Api.Slot> availability(LocalDate date, int guests) {
         if (date == null || date.isBefore(LocalDate.now(clock)) || guests < 1 || guests > settings.maxGuests()) throw new ApiException(400, "Choose a current or future date and a valid party size");
         var result = new ArrayList<Api.Slot>();
-        var candidates = tables.findAllByOrderByCapacityAscIdAsc().stream().filter(t -> t.accommodates(guests)).toList();
         for (var start = date.atTime(settings.opening()); !start.plusMinutes(settings.durationMinutes()).isAfter(date.atTime(settings.closing())); start = start.plusMinutes(settings.slotMinutes())) {
             if (!start.isAfter(LocalDateTime.now(clock))) continue;
-            int count = 0;
-            for (var t : candidates) if (reservations.overlaps(t.getId(), start, start.plusMinutes(settings.durationMinutes()), ACTIVE) == 0) count++;
-            result.add(new Api.Slot(start.toLocalTime(), count));
+            var end=start.plusMinutes(settings.durationMinutes());var busy=occupied(start,end,null);var available=free(busy);
+            int seats=Math.min(planner.remainingCapacity(busy,start,end),available.stream().mapToInt(RestaurantTable::getCapacity).sum());
+            result.add(new Api.Slot(start.toLocalTime(),seats>=guests?available.size():0,seats));
         }
         return result;
     }

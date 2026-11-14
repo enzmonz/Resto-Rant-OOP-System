@@ -56,6 +56,8 @@ Go to **http://127.0.0.1:8080** in your browser.
 - **Customer:** click **Log in → Create an account**, then **Book a table**.
 - **Admin:** log in with the admin email and password you chose in step 3.
 
+Reservations now include a **GCash demo deposit of ₱500 per person**. Choose a date, time, and tables, then complete the simulated checkout. Payment is automatically verified; no real money, GCash login, MPIN, or OTP is used. Administrators can change the amount under **Dashboard → Deposit policy**.
+
 To stop the app, go back to PowerShell and press **Ctrl + C**.
 
 Your data (accounts, bookings) is saved in `backend/.local/` on your own computer and stays there between restarts. Each groupmate has their own separate data.
@@ -102,7 +104,10 @@ Your data (accounts, bookings) is saved in `backend/.local/` on your own compute
 - Browse restaurant information and operating hours.
 - Check reservation availability.
 - Create restaurant reservations.
-- Automatic best-fit table assignment.
+- Select and combine 2-, 4-, and 6-seat tables, or use automatic assignment.
+- Date-first availability, color-coded time slots, and alternative date suggestions.
+- Assistance and dietary requests with an expanding text area.
+- ₱500-per-person GCash demo checkout with automatic simulated verification.
 - View reservation details and booking history.
 - Cancel eligible reservations.
 - Session-based authentication.
@@ -115,6 +120,8 @@ Your data (accounts, bookings) is saved in `backend/.local/` on your own compute
 - Manage restaurant tables and seating capacities.
 - Check table availability.
 - Search customers and view their reservation history.
+- Register staff, create/edit/disable customers, and create/edit/cancel reservations.
+- Review contact inquiries and set the per-person deposit amount.
 
 ### Security and Reliability
 - Role-based access control (RBAC).
@@ -195,7 +202,9 @@ The script finds Java 21 automatically (from `JAVA_HOME`, the PATH, or the usual
 
 ### Demo Data
 
-Demo mode automatically creates eight restaurant tables with capacities from 2 to 12 seats.
+New demo databases automatically get **25 tables: 8 × 2 seats, 9 × 4 seats, and 8 × 6 seats (100 total)**. Customers can combine tables, and the server prevents overlapping use of every selected table and more than 100 simultaneous guests.
+
+Existing databases keep their tables and booking history. To adopt the new layout, use **Dashboard → Tables → Apply 25-table / 100-seat layout** after upcoming reservations are finished or otherwise resolved. The app will refuse to overwrite a layout used by upcoming reservations.
 
 An optional sample customer (`guest@restorant.local`) with one reservation can be created by setting a password before starting:
 
@@ -333,7 +342,12 @@ All endpoints are served under `/api`.
 |---|---|---|
 | GET | `/api/info` | Get restaurant information |
 | GET | `/api/availability?date=YYYY-MM-DD&guests=2` | Check available seating |
-| POST | `/api/reservations` | Create reservation |
+| GET | `/api/availability/tables?date=YYYY-MM-DD&time=12:00&guests=2` | Check table availability |
+| GET | `/api/availability/dates?date=YYYY-MM-DD&guests=2` | Suggest other dates |
+| GET | `/api/deposit-policy` | Get the current deposit |
+| POST | `/api/reservations/demo-checkout` | Create reservation and verify simulated GCash payment |
+| POST | `/api/reservations` | Legacy unpaid request; use demo checkout for the normal flow |
+| POST | `/api/reservations/{id}/demo-payment` | Pay a staff-created booking in the demo |
 | GET | `/api/reservations/my` | Get customer reservations |
 | GET | `/api/reservations/{id}` | Get reservation details |
 | PUT | `/api/reservations/{id}/cancel` | Cancel reservation |
@@ -351,6 +365,13 @@ All endpoints are served under `/api`.
 | DELETE | `/api/admin/tables/{id}` | Disable restaurant table |
 | GET | `/api/admin/customers?q=...` | Search customers |
 | GET | `/api/admin/customers/{id}/reservations` | View customer history |
+| POST | `/api/admin/accounts` | Register another administrator |
+| POST / PUT / DELETE | `/api/admin/customers` and `/{id}` | Create, edit, or disable customers |
+| POST | `/api/admin/customers/{id}/reservations` | Book for a customer |
+| PUT / DELETE | `/api/admin/reservations/{id}` | Edit or cancel a reservation |
+| POST | `/api/admin/layout` | Apply the 25-table layout when safe |
+| PUT | `/api/admin/deposit-policy` | Set the deposit amount |
+| GET / PUT | `/api/admin/inquiries` and `/{id}/resolve` | Read and resolve inquiries |
 
 ### API Security
 
@@ -376,11 +397,13 @@ The app uses session login and CSRF protection. For POST, PUT, and DELETE reques
 
 ## Testing
 
+For class presentations, use the [OOP presentation guide](docs/OOP_PRESENTATION_GUIDE.md) and the [backend speaking script](docs/BACKEND_PRESENTATION_SCRIPT.md). The guide links the Java classes to encapsulation, inheritance, polymorphism, and abstraction.
+
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\run-backend.ps1 verify
 ```
 
-The 14 automated tests cover:
+The automated tests cover:
 
 - Customer registration and password validation.
 - Login, session handling, and logout.
@@ -392,6 +415,9 @@ The 14 automated tests cover:
 - Table capacity and management constraints.
 - Simultaneous reservation requests.
 - Flyway migrations and Hibernate schema validation.
+- Multi-table reservations, the 100-person limit, alternative dates, and layout replacement safeguards.
+- Per-person demo deposits, automatic payment verification, retry protection, and price-change rejection.
+- Staff registration, customer access, inquiry storage, and preservation of existing bookings during upgrades.
 
 The tests use H2 in MySQL compatibility mode, which is not the same as testing on a real MySQL server. For that, use `.\run-backend.ps1 mysql-test`.
 
@@ -400,11 +426,11 @@ The tests use H2 in MySQL compatibility mode, which is not the same as testing o
 1. Register a new customer account.
 2. Log in as the customer.
 3. Pick a date and see available times.
-4. Create a reservation.
+4. Select tables and complete the GCash demo checkout; check the total is ₱500 × guests.
 5. View it under **My reservations**.
 6. Cancel a reservation.
 7. Log in as the admin.
-8. Confirm a pending reservation.
+8. Confirm a pending reservation whose demo deposit is verified.
 9. Add or edit a table.
 10. Search for a customer and view their history.
 

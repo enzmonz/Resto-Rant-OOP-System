@@ -20,6 +20,9 @@ public abstract class User {
     private String phoneNumber;
     @Column(nullable = false, length = 100)
     private String passwordHash;
+    @Column(nullable = false) private boolean enabled = true;
+    public boolean isEnabled() { return enabled; }
+    public void setEnabled(boolean enabled) { this.enabled = enabled; }
 
     protected User() {}
     protected User(String name, String email, String phone, String passwordHash) {

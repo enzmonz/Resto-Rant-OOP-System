@@ -44,5 +44,10 @@ restaurant:
   closing: ${RESTAURANT_CLOSING:22:00}
   duration-minutes: ${RESERVATION_DURATION:120}
   slot-minutes: 30
-  max-guests: 12
+  max-guests: 100
   cancellation-hours: 2
+
+deposit:
+  amount: ${DEPOSIT_AMOUNT:500}
+  method: GCash demo — simulated payment only; no real money is transferred
+  per-person: true

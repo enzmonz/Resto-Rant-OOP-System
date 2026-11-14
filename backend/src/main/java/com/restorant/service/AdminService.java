@@ -51,4 +51,16 @@ public class AdminService {
         result.put("availableTables",tables(null,duration).stream().filter(Api.TableView::available).count());
         result.put("totalTables",tables.count()); return result;
     }
+    @Transactional(isolation=Isolation.READ_COMMITTED)
+    public void applyLayout() {
+        mutex.acquire();
+        if(reservations.findAll().stream().anyMatch(r->BookingService.ACTIVE.contains(r.getStatus()) && r.getEndsAt().isAfter(LocalDateTime.now(clock))))
+            throw new ApiException(409,"Finish or cancel future reservations before replacing the dining-room layout");
+        var existing=tables.findAll();existing.forEach(t->t.setEnabled(false));tables.saveAll(existing);tables.flush();
+        for(int i=1;i<=25;i++) {
+            String number="D"+String.format("%02d",i);int capacity=i<=8?2:i<=17?4:6;
+            var table=existing.stream().filter(t->t.getTableNumber().equals(number)).findFirst().orElseGet(()->new RestaurantTable(number,capacity));
+            table.update(number,capacity);table.setEnabled(true);tables.save(table);
+        }
+    }
 }

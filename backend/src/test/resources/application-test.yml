@@ -8,3 +8,6 @@ spring:
   flyway:
     user: sa
     password:
+deposit:
+  amount: 500
+  method: Manual test payment

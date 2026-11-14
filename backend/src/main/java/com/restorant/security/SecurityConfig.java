@@ -17,7 +17,7 @@ public class SecurityConfig {
     @Bean PasswordEncoder passwordEncoder() { return new BCryptPasswordEncoder(); }
     @Bean UserDetailsService userDetails(UserRepository users) {
         return email -> users.findByEmail(AccountService.normalize(email)).map(u ->
-            User.withUsername(u.getEmail()).password(u.getPasswordHash()).roles(u.getRole()).build())
+            User.withUsername(u.getEmail()).password(u.getPasswordHash()).roles(u.getRole()).disabled(!u.isEnabled()).build())
             .orElseThrow(() -> new UsernameNotFoundException("Invalid credentials"));
     }
     @Bean AuthenticationManager authenticationManager(UserDetailsService users, PasswordEncoder encoder) {
@@ -30,8 +30,8 @@ public class SecurityConfig {
         return http.securityContext(c -> c.securityContextRepository(contexts))
             .csrf(c -> c.csrfTokenRepository(new HttpSessionCsrfTokenRepository()))
             .authorizeHttpRequests(a -> a
-                .requestMatchers("/", "/index.html", "/app.js", "/style.css", "/assets/**", "/error",
-                    "/api/auth/csrf", "/api/auth/register", "/api/auth/login", "/api/info", "/api/availability").permitAll()
+                .requestMatchers("/", "/index.html", "/app.js", "/experience.js", "/style.css", "/assets/**", "/error",
+                    "/api/auth/csrf", "/api/auth/register", "/api/auth/login", "/api/info", "/api/availability/**", "/api/deposit-policy", "/api/inquiries").permitAll()
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 .requestMatchers("/api/reservations/**").hasRole("CUSTOMER")
                 .anyRequest().authenticated())
@@ -39,7 +39,7 @@ public class SecurityConfig {
                 .accessDeniedHandler((req,res,ex) -> { res.setStatus(403); res.setContentType("application/json"); res.getWriter().write("{\"message\":\"Access denied or session token expired. Refresh and try again.\"}"); }))
             .logout(l -> l.logoutUrl("/api/auth/logout").deleteCookies("JSESSIONID")
                 .logoutSuccessHandler((req,res,auth) -> res.setStatus(204)))
-            .headers(h -> h.contentSecurityPolicy(c -> c.policyDirectives("default-src 'self'; img-src 'self' https://images.unsplash.com; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")))
+            .headers(h -> h.contentSecurityPolicy(c -> c.policyDirectives("default-src 'self'; img-src 'self' https://images.unsplash.com; style-src 'self'; script-src 'self'; frame-src https://www.google.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")))
             .build();
     }
 }
