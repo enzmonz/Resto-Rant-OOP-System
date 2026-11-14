@@ -22,7 +22,7 @@ async function api(path, options={}) {
 }
 function chrome() {
   $('#header').innerHTML=`<div class="wrap"><div class="site-header"><a class="brand" href="#home">Resto Rant<span>.</span></a><nav class="nav" aria-label="Main navigation"><a href="#home">Our place</a>${user?`<a href="${user.role==='ADMIN'?'#admin':'#reservations'}">${user.role==='ADMIN'?'Dashboard':'My reservations'}</a><button class="text-button" id="logout">Log out</button>`:'<a href="#login">Log in</a>'}<a class="button" href="#reserve">Book a table <span aria-hidden="true">↗</span></a></nav></div></div>`;
-  $('#footer').innerHTML=`<div class="wrap"><div class="site-footer"><a class="brand" href="#home">Resto Rant<span>.</span></a><span>Good food. Better company.</span><span>© ${new Date().getFullYear()} Resto Rant · A restaurant project</span></div></div>`;
+  $('#footer').innerHTML=`<div class="wrap"><div class="site-footer"><a class="brand" href="#home">Resto Rant<span>.</span></a><span>Great food, Good experience</span><span>© ${new Date().getFullYear()} Resto Rant · A restaurant project</span></div></div>`;
   $('#logout')?.addEventListener('click',async()=>{try{await api('/auth/logout',{method:'POST'});user=null;csrf=null;location.hash='home';await render();toast('You have been logged out.');}catch(e){toast(e.message);}});
 }
 function home() {
