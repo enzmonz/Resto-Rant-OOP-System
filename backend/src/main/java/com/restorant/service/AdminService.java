@@ -15,18 +15,24 @@ public class AdminService {
     private final ReservationRepository reservations;
     private final BookingMutex mutex;
     private final Clock clock;
-    public AdminService(TableRepository tables, UserRepository users, ReservationRepository reservations, BookingMutex mutex, Clock clock) {
-        this.tables=tables; this.users=users; this.reservations=reservations; this.mutex=mutex; this.clock=clock;
+    private final PricingService pricing;
+    private final PaymentService payments;
+    public AdminService(TableRepository tables, UserRepository users, ReservationRepository reservations, BookingMutex mutex, Clock clock,
+                        PricingService pricing, PaymentService payments) {
+        this.tables=tables; this.users=users; this.reservations=reservations; this.mutex=mutex; this.clock=clock; this.pricing=pricing; this.payments=payments;
     }
     public List<Api.Account> customers(String query) {
         String q = query == null ? "" : query.toLowerCase(Locale.ROOT);
         return users.findAll().stream().filter(u -> u instanceof Customer)
-            .filter(u -> (u.getFullName()+" "+u.getEmail()+" "+u.getPhoneNumber()).toLowerCase(Locale.ROOT).contains(q)).map(Api.Account::of).toList();
+            // Phone numbers are stored as +639XXXXXXXXX; the 09XXXXXXXXX spelling is searchable too.
+            .filter(u -> (u.getFullName()+" "+u.getEmail()+" "+u.getPhoneNumber()+" "+com.restorant.validation.PhoneNumbers.local(u.getPhoneNumber())).toLowerCase(Locale.ROOT).contains(q)).map(Api.Account::of).toList();
     }
     public List<Api.TableView> tables(LocalDateTime at, int duration) {
         var start = at == null ? LocalDateTime.now(clock) : at;
+        var prices = pricing.priceList();
         return tables.findAllByOrderByCapacityAscIdAsc().stream().map(t -> new Api.TableView(t.getId(),t.getTableNumber(),t.getCapacity(),t.isEnabled(),
-            t.isEnabled() && reservations.overlaps(t.getId(),start,start.plusMinutes(duration),BookingService.ACTIVE)==0)).toList();
+            t.isEnabled() && reservations.overlaps(t.getId(),start,start.plusMinutes(duration),BookingService.ACTIVE)==0,
+            prices.priceFor(t.getCapacity()),false)).toList();
     }
     @Transactional(isolation=Isolation.READ_COMMITTED)
     public Api.TableView save(Long id, Api.TableInput input) {
@@ -36,7 +42,7 @@ public class AdminService {
             && reservations.existsByTableIdAndEndsAtAfterAndStatusIn(id,LocalDateTime.now(clock),BookingService.ACTIVE))
             throw new ApiException(409,"Cancel or finish this table's upcoming reservations before reducing capacity or disabling it");
         t.update(input.tableNumber(),input.capacity()); t.setEnabled(input.enabled()); tables.saveAndFlush(t);
-        return new Api.TableView(t.getId(),t.getTableNumber(),t.getCapacity(),t.isEnabled(),false);
+        return new Api.TableView(t.getId(),t.getTableNumber(),t.getCapacity(),t.isEnabled(),false,pricing.priceFor(t.getCapacity()),false);
     }
     @Transactional(isolation=Isolation.READ_COMMITTED)
     public void disable(Long id) {
@@ -49,7 +55,7 @@ public class AdminService {
         for(var status: Reservation.Status.values()) result.put(status.name().toLowerCase(Locale.ROOT),all.stream().filter(r -> r.getStatus()==status).count());
         result.put("totalCustomers", (long)customers("").size());
         result.put("availableTables",tables(null,duration).stream().filter(Api.TableView::available).count());
-        result.put("totalTables",tables.count()); return result;
+        result.put("totalTables",tables.count()); result.putAll(new TreeMap<>(payments.counts())); return result;
     }
     @Transactional(isolation=Isolation.READ_COMMITTED)
     public void applyLayout() {

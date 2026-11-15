@@ -20,7 +20,7 @@ public class AdminController {
         @RequestParam(required=false) Reservation.Status status,@RequestParam(defaultValue="") String q,@RequestParam(required=false) Long customerId) {
         return bookings.search(date,status,q,customerId);
     }
-    @PutMapping("/reservations/{id}/status") public Api.BookingView status(@PathVariable Long id,@Valid @RequestBody Api.StatusInput input) { return bookings.changeStatus(id,input.status()); }
+    @PutMapping("/reservations/{id}/status") public Api.BookingView status(java.security.Principal staff,@PathVariable Long id,@Valid @RequestBody Api.StatusInput input) { return bookings.changeStatus(id,input.status(),staff.getName()); }
     @GetMapping("/customers") public List<Api.Account> customers(@RequestParam(defaultValue="") String q) { return admin.customers(q); }
     @GetMapping("/customers/{id}/reservations") public List<Api.BookingView> history(@PathVariable Long id) { return bookings.search(null,null,"",id); }
     @GetMapping("/tables") public List<Api.TableView> tables(@RequestParam(required=false) LocalDateTime at) { return admin.tables(at,settings.durationMinutes()); }

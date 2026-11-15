@@ -12,7 +12,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Configuration
 public class SeedData {
     @Bean ApplicationRunner bootstrap(UserRepository users,TableRepository tables,ReservationRepository bookings,
-            PasswordEncoder encoder,Environment env,Clock clock,RestaurantSettings settings,TransactionTemplate tx,DepositPolicy deposit) {
+            PasswordEncoder encoder,Environment env,Clock clock,RestaurantSettings settings,TransactionTemplate tx,com.restorant.service.PricingService pricing) {
         return args -> tx.executeWithoutResult(status -> {
             String adminPassword=env.getProperty("SEED_ADMIN_PASSWORD");
             if(adminPassword!=null && !adminPassword.isBlank()) {
@@ -32,11 +32,10 @@ public class SeedData {
             if(!users.existsByEmail(email)) {
                 var customer=users.save(new Customer("Alex Rivera",email,"09171234567",encoder.encode(password)));
                 var start=LocalDate.now(clock).plusDays(1).atTime(settings.opening());
-                if(deposit.getAmount().signum()>0) {
-                    var sample=new Reservation(customer,tables.findAllByOrderByCapacityAscIdAsc().getFirst(),start,
-                        start.plusMinutes(settings.durationMinutes()),2,"A quiet corner, please.",clock);
-                    sample.requireDeposit(deposit.total(2));bookings.save(sample);
-                }
+                var sample=new Reservation(customer,tables.findAllByOrderByCapacityAscIdAsc().getFirst(),start,
+                    start.plusMinutes(settings.durationMinutes()),2,"A quiet corner, please.",clock);
+                // The sample booking is unpaid: no payment is ever recorded without staff verification.
+                sample.priceItems(t->pricing.priceFor(t.getCapacity()));bookings.save(sample);
             }
         });
     }

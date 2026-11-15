@@ -1,5 +1,4 @@
 package com.restorant.controller;
-import com.restorant.config.DepositPolicy;
 import com.restorant.dto.Api;
 import com.restorant.service.*;
 import com.restorant.entity.Inquiry;
@@ -12,24 +11,17 @@ import org.springframework.http.HttpStatus;
 
 @RestController @RequestMapping("/api")
 public class UpdatesController {
-    private final BookingService bookings;private final DepositPolicy deposit;private final InquiryService inquiries;
+    private final BookingService bookings;private final InquiryService inquiries;
     private final AccountService accounts;private final AdminService admin;
-    public UpdatesController(BookingService bookings,DepositPolicy deposit,InquiryService inquiries,AccountService accounts,AdminService admin){this.bookings=bookings;this.deposit=deposit;this.inquiries=inquiries;this.accounts=accounts;this.admin=admin;}
-    @GetMapping("/deposit-policy") public DepositPolicy.View policy(){return deposit.snapshot();}
-    @PostMapping("/reservations/demo-checkout") @ResponseStatus(HttpStatus.CREATED)
-    public Api.BookingView demoCheckout(Principal user,@Valid @RequestBody Api.DemoCheckout input){return bookings.demoCheckout(user.getName(),input);}
-    @PostMapping("/reservations/{id}/demo-payment")
-    public Api.BookingView demoPayment(Principal user,@PathVariable Long id){return bookings.demoPayment(user.getName(),id);}
-    @PutMapping("/admin/deposit-policy") public DepositPolicy.View policy(@Valid @RequestBody Api.DepositInput input){deposit.configure(input.amount(),input.method(),input.perPerson());return deposit.snapshot();}
+    public UpdatesController(BookingService bookings,InquiryService inquiries,AccountService accounts,AdminService admin){this.bookings=bookings;this.inquiries=inquiries;this.accounts=accounts;this.admin=admin;}
     @GetMapping("/availability/tables") public List<Api.TableView> seating(@RequestParam LocalDate date,@RequestParam LocalTime time,@RequestParam int guests,@RequestParam(required=false) Integer duration){return bookings.seating(date,time,guests,duration);}
     @GetMapping("/availability/dates") public List<LocalDate> dates(@RequestParam LocalDate date,@RequestParam int guests,@RequestParam(required=false) Integer duration){return bookings.alternatives(date,guests,duration);}
-    @PostMapping("/reservations/{id}/payment") public Api.BookingView payment(Principal user,@PathVariable Long id,@Valid @RequestBody Api.Payment input){return bookings.submitPayment(user.getName(),id,input.reference());}
-    @PutMapping("/admin/reservations/{id}/payment") public Api.BookingView review(@PathVariable Long id,@Valid @RequestBody Api.PaymentReview input){return bookings.reviewPayment(id,input);}
-    @PutMapping("/admin/reservations/{id}/refund") public Api.BookingView refund(@PathVariable Long id,@Valid @RequestBody Api.Payment input){return bookings.refund(id,input.reference());}
-    @PutMapping("/admin/reservations/{id}") public Api.BookingView edit(@PathVariable Long id,@Valid @RequestBody Api.Booking input){return bookings.edit(id,input);}
+    @PutMapping("/admin/reservations/{id}") public Api.BookingView edit(Principal staff,@PathVariable Long id,@Valid @RequestBody Api.Booking input){return bookings.edit(id,input,staff.getName());}
     @PostMapping("/admin/customers/{id}/reservations") @ResponseStatus(HttpStatus.CREATED)
-    public Api.BookingView create(@PathVariable Long id,@Valid @RequestBody Api.Booking input){return bookings.create(accounts.customer(id).getEmail(),input);}
-    @DeleteMapping("/admin/reservations/{id}") public Api.BookingView cancel(@PathVariable Long id){return bookings.changeStatus(id,com.restorant.entity.Reservation.Status.CANCELLED);}
+    public Api.BookingView create(Principal staff,@PathVariable Long id,@Valid @RequestBody Api.Booking input){return bookings.create(accounts.customer(id).getEmail(),input,staff.getName());}
+    @DeleteMapping("/admin/reservations/{id}") public Api.BookingView cancel(Principal staff,@PathVariable Long id){return bookings.changeStatus(id,com.restorant.entity.Reservation.Status.CANCELLED,staff.getName());}
+    @PostMapping("/admin/reservations/{id}/cancel-tables")
+    public Api.BookingView cancelTables(Principal staff,@PathVariable Long id,@Valid @RequestBody Api.CancelTables input){return bookings.cancelTablesAsStaff(id,input,staff.getName());}
     @PostMapping("/admin/accounts") @ResponseStatus(HttpStatus.CREATED) public Api.Account admin(@Valid @RequestBody Api.Register input){return accounts.registerAdmin(input);}
     @GetMapping("/admin/accounts") public List<Api.Account> staff(){return accounts.staff();}
     @PostMapping("/admin/customers") @ResponseStatus(HttpStatus.CREATED) public Api.Account customer(@Valid @RequestBody Api.Register input){return accounts.register(input);}

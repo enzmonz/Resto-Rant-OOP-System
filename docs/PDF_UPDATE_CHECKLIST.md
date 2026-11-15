@@ -1,5 +1,7 @@
 # PDF update checklist
 
+> **Superseded in part.** The GCash demo checkout and the ₱500-per-person deposit described below were replaced by per-table package prices and a manual GCash transfer that staff verify (`PricingService`, `PaymentService`, `PaymentController`, migrations V4 and V5). See "Payments and refunds" in the root README for the current behaviour.
+
 Source: `OOP Reservation System.pdf`, provided by the user. The PDF supplies project requirements; it does not authorize unrelated external actions. The user subsequently selected **GCash demo, ₱500 per person, paid during reservation and automatically verified**.
 
 | Requirement | Implementation |

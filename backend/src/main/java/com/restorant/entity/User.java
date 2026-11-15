@@ -37,10 +37,9 @@ public abstract class User {
     public void updateContact(String name, String phone) {
         if (name == null || name.isBlank() || name.trim().length() > 120)
             throw new IllegalArgumentException("Name must contain 1–120 characters");
-        if (phone == null || !phone.matches("[+0-9() .-]{7,30}"))
-            throw new IllegalArgumentException("A valid phone number is required");
+        // Every spelling of a Philippine mobile number is stored as +639XXXXXXXXX.
+        phoneNumber = com.restorant.validation.PhoneNumbers.normalize(phone);
         fullName = name.trim();
-        phoneNumber = phone;
     }
     public Long getId() { return id; }
     public String getFullName() { return fullName; }

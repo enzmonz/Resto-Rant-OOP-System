@@ -1,5 +1,7 @@
 # Resto Rant: OOP presentation guide
 
+> **Superseded in part.** The GCash demo checkout and the ₱500-per-person deposit described below were replaced by per-table package prices and a manual GCash transfer that staff verify (`PricingService`, `PaymentService`, `PaymentController`, migrations V4 and V5). See "Payments and refunds" in the root README for the current behaviour.
+
 This guide explains the **Java backend that is actually in this repository**. Open the linked source files while presenting. The companion [speaking script](BACKEND_PRESENTATION_SCRIPT.md) gives you a ready-to-practice explanation of the whole backend.
 
 ## One-sentence introduction

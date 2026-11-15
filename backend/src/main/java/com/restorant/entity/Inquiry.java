@@ -13,7 +13,7 @@ public class Inquiry {
     @Column(nullable=false) private Instant createdAt;
     @Column(nullable=false) private boolean resolved;
     protected Inquiry() {}
-    public Inquiry(Api.InquiryInput input,Instant now){fullName=input.fullName().trim();email=input.email().trim();phoneNumber=input.phoneNumber();message=input.message().trim();createdAt=now;}
+    public Inquiry(Api.InquiryInput input,Instant now){fullName=input.fullName().trim();email=input.email().trim();phoneNumber=com.restorant.validation.PhoneNumbers.normalize(input.phoneNumber());message=input.message().trim();createdAt=now;}
     public void resolve(){resolved=true;}
     public Long getId(){return id;} public String getFullName(){return fullName;} public String getEmail(){return email;}
     public String getPhoneNumber(){return phoneNumber;} public String getMessage(){return message;}

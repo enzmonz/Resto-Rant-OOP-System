@@ -1,0 +1,29 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "resto-rant-demo",
+      "runtimeExecutable": "powershell",
+      "runtimeArgs": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        "$env:JAVA_HOME = Join-Path (Get-Location) '.tools\\jdk-21.0.12.1'; $env:PATH = $env:JAVA_HOME + '\\bin;' + $env:PATH; $repo = Join-Path (Get-Location) '.tools\\maven-repository'; Set-Location backend; if (Test-Path '.local\\admin-password.txt') { $env:SEED_ADMIN_EMAIL = 'admin@restorant.local'; $env:SEED_ADMIN_PASSWORD = (Get-Content -Raw '.local\\admin-password.txt').Trim() }; & .\\mvnw.cmd -B -ntp ('-Dmaven.repo.local=' + $repo) '-Dspring-boot.run.profiles=demo' spring-boot:run"
+      ],
+      "port": 8080
+    },
+    {
+      "name": "resto-rant-verify",
+      "runtimeExecutable": "powershell",
+      "runtimeArgs": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        "$env:JAVA_HOME = Join-Path (Get-Location) '.tools\\jdk-21.0.12.1'; $env:PATH = $env:JAVA_HOME + '\\bin;' + $env:PATH; $repo = Join-Path (Get-Location) '.tools\\maven-repository'; $db = (Join-Path $env:TEMP 'resto-rant-verify\\db').Replace('\\','/'); $env:SPRING_DATASOURCE_URL = 'jdbc:h2:file:' + $db + ';MODE=MySQL;DB_CLOSE_ON_EXIT=FALSE'; $env:SERVER_PORT = '8081'; Set-Location backend; $env:SEED_ADMIN_EMAIL = 'verify-admin@example.com'; $env:SEED_ADMIN_PASSWORD = 'Verify-only-admin-7316'; & .\\mvnw.cmd -B -ntp ('-Dmaven.repo.local=' + $repo) '-Dspring-boot.run.profiles=demo' spring-boot:run"
+      ],
+      "port": 8081
+    }
+  ]
+}

@@ -16,12 +16,17 @@ spring:
       hibernate:
         jdbc:
           time_zone: UTC
+        default_batch_fetch_size: 50
   flyway:
     user: ${DB_MIGRATION_USERNAME:${DB_USERNAME}}
     password: ${DB_MIGRATION_PASSWORD:${DB_PASSWORD}}
   sql:
     init:
       mode: never
+  servlet:
+    multipart:
+      max-file-size: 3MB
+      max-request-size: 4MB
 
 server:
   address: ${SERVER_ADDRESS:127.0.0.1}
@@ -47,7 +52,9 @@ restaurant:
   max-guests: 100
   cancellation-hours: 2
 
-deposit:
-  amount: ${DEPOSIT_AMOUNT:500}
-  method: GCash demo — simulated payment only; no real money is transferred
-  per-person: true
+# Reservation packages are paid by manual GCash transfer and verified by staff.
+# "manual" is the only provider: no payment-provider merchant account or API credentials are configured.
+payment:
+  provider: ${PAYMENT_PROVIDER:manual}
+  gcash-number: ${GCASH_NUMBER:09778021234}
+  gcash-account-name: ${GCASH_ACCOUNT_NAME:}

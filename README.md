@@ -56,7 +56,7 @@ Go to **http://127.0.0.1:8080** in your browser.
 - **Customer:** click **Log in → Create an account**, then **Book a table**.
 - **Admin:** log in with the admin email and password you chose in step 3.
 
-Reservations now include a **GCash demo deposit of ₱500 per person**. Choose a date, time, and tables, then complete the simulated checkout. Payment is automatically verified; no real money, GCash login, MPIN, or OTP is used. Administrators can change the amount under **Dashboard → Deposit policy**.
+Each reserved table has a **package price by its number of seats** (sample prices: ₱600 for 2 seats, ₱1,100 for 4, ₱1,600 for 6), and a reservation costs the sum of its tables. Customers pay by **manual GCash transfer to 0977 802 1234** and submit the reference number; the payment stays *pending* until an administrator finds the transfer in that account and marks it paid under **Dashboard → Payments**. Prices are edited under **Dashboard → Package prices**. See [Payments and refunds](#payments-and-refunds).
 
 To stop the app, go back to PowerShell and press **Ctrl + C**.
 
@@ -73,7 +73,7 @@ Your data (accounts, bookings) is saved in `backend/.local/` on your own compute
 | `running scripts is disabled on this system` | Use the full command from step 3 (`powershell -NoProfile -ExecutionPolicy Bypass -File ...`). |
 | `Port 8080 was already in use` | Another program (or a second copy of the app) is using it. Close it, or run `$env:SERVER_PORT = '8081'` first and open http://127.0.0.1:8081 instead. |
 | Forgot the admin password | Stop the app, then follow [Reset the demo database](#reset-the-demo-database). This deletes all local accounts and bookings. |
-| "No tables are available" | Bookings last 2 hours and the restaurant closes at 10 PM, so late in the day there are no slots left today. Pick tomorrow's date. |
+| "No tables are available" | A start time is only offered when the whole stay fits before the 10 PM closing time (restaurant time, Asia/Manila), so late in the day there are no slots left today. Pick tomorrow's date or a shorter stay. |
 | My HTML/CSS/JS changes don't show | Stop the app (Ctrl + C) and start it again. The frontend is packaged when the app starts. Then hard-refresh the browser (Ctrl + F5). |
 | First run fails while downloading | Check your internet connection and run the command again. |
 | Startup seems stuck | The first start downloads Maven dependencies. Wait a few minutes and watch for new output. If there is no new output after 5 minutes, copy the last lines from PowerShell and check your internet connection. Do not delete `backend/.local` unless you intend to reset the demo data. |
@@ -121,7 +121,11 @@ When prompted, create a new admin email and password (at least 10 characters). W
 - Select and combine 2-, 4-, and 6-seat tables, or use automatic assignment.
 - Date-first availability, color-coded time slots, and alternative date suggestions.
 - Assistance and dietary requests with an expanding text area.
-- ₱500-per-person GCash demo checkout with automatic simulated verification.
+- Food and drinks menu on the homepage (Filipino, Chinese, Japanese, drinks). It is a menu listing only; there is no online ordering.
+- Itemized package price per selected table, shown before reserving and stored as a price snapshot.
+- “Assign tables for me” highlights the exact tables that will be booked.
+- Manual GCash transfer with reference number and optional receipt image; pending until staff verify it.
+- Cancel a whole reservation or only some of its tables.
 - View reservation details and booking history.
 - Cancel eligible reservations.
 - Session-based authentication.
@@ -135,7 +139,10 @@ When prompted, create a new admin email and password (at least 10 characters). W
 - Check table availability.
 - Search customers and view their reservation history.
 - Register staff, create/edit/disable customers, and create/edit/cancel reservations.
-- Review contact inquiries and set the per-person deposit amount.
+- Review contact inquiries and edit table package prices.
+- Verify or reject GCash payments against the receiving account.
+- Track manual refunds (amount, reason, payment reference, refund reference, status, actor) with an audit history.
+- Cancel selected tables of a multi-table reservation.
 
 ### Security and Reliability
 - Role-based access control (RBAC).
@@ -216,7 +223,7 @@ The script finds Java 21 automatically (from `JAVA_HOME`, the PATH, or the usual
 
 ### Demo Data
 
-New demo databases automatically get **25 tables: 8 × 2 seats, 9 × 4 seats, and 8 × 6 seats (100 total)**. Customers can combine tables, and the server prevents overlapping use of every selected table and more than 100 simultaneous guests.
+New demo databases automatically get **25 tables: 8 × 2 seats, 9 × 4 seats, and 8 × 6 seats (100 total)**. Customers can combine tables. The server requires the selected (or automatically assigned) tables themselves to have enough seats for the party, and prevents overlapping use of every table and more than 100 simultaneous guests. New databases also get the sample package prices.
 
 Existing databases keep their tables and booking history. To adopt the new layout, use **Dashboard → Tables → Apply 25-table / 100-seat layout** after upcoming reservations are finished or otherwise resolved. The app will refuse to overwrite a layout used by upcoming reservations.
 
@@ -234,7 +241,7 @@ Demo mode is enough for development and presentations. Use MySQL only if your gr
 
 Run `database/setup.sql` in MySQL Workbench.
 
-Flyway then creates the tables automatically from `backend/src/main/resources/db/migration/V1__initial_schema.sql`. Do not manually run the older `database/phase-2-schema.sql` draft.
+Flyway then creates and upgrades the tables automatically from the migrations in `backend/src/main/resources/db/migration/` (plus one Java migration in `com.restorant.migration` that carries existing bookings, payments and phone numbers forward). Existing data is migrated, not reset. Do not manually run the older `database/phase-2-schema.sql` draft.
 
 ### 2. Create database accounts
 
@@ -288,25 +295,66 @@ Restaurant tables can then be added through the admin dashboard.
 | `SEED_ADMIN_EMAIL` | `admin@restorant.local` | Initial administrator email |
 | `SEED_ADMIN_PASSWORD` | none | Initial administrator password (min. 10 characters) |
 | `SEED_CUSTOMER_PASSWORD` | none | Demo customer password |
+| `GCASH_NUMBER` | `09778021234` | GCash number customers send payments to |
+| `GCASH_ACCOUNT_NAME` | empty | Account name shown next to the number (recommended, so customers can check the recipient) |
+| `PAYMENT_PROVIDER` | `manual` | Only `manual` exists. Any other value stops the app at startup |
 
 Slot spacing, maximum party size, and cancellation cutoff are in `backend/src/main/resources/application.yml`.
 
 ## Reservation Rules
 
 - Reservations must fall within restaurant operating hours.
-- Each reservation is assigned the smallest available table that fits the party.
-- Guests choose how long they will stay: 1, 1½, 2, 2½, or 3 hours (2 hours if none is chosen). The stay must end by closing time.
+- A reservation holds one or more tables whose own seats cover the party: 100 guests need tables adding up to 100 seats.
+- Automatic assignment picks the smallest free combination; the browser shows and submits exactly those tables.
+- Guests choose how long they will stay: 1, 1½, 2, 2½, or 3 hours (2 hours if none is chosen). A start time is offered and accepted only if the whole stay ends by closing time and every assigned table is free for the whole stay; this is rechecked inside the booking lock.
 - Reservations can be made up to 365 days ahead.
-- Phone numbers must be Philippine mobile numbers: `09XXXXXXXXX` or `+639XXXXXXXXX`.
+- Phone numbers are Philippine mobile numbers. Forms show a fixed `+63` prefix and take the 10 digits after it (starting with 9). The server also accepts `09XXXXXXXXX`, `639XXXXXXXXX` and `+639XXXXXXXXX`, and stores every number as `+639XXXXXXXXX`.
 - Back-to-back reservations on the same table are allowed.
 - Pending and confirmed reservations occupy their assigned tables.
-- Customers can cancel up to two hours before the reservation starts.
+- Customers can cancel a reservation, or some of its tables, up to two hours before it starts. Tables cancelled before that cutoff are refundable in full; staff can still cancel later, but those tables are recorded as not refundable.
+- When tables are cancelled, the remaining tables must still seat the guests, or the guest count must be reduced in the same request. At least one table must remain.
+- A reservation can be confirmed only after its payment is verified.
 - Reservations can only be completed after their scheduled end time.
 - Cancelled and completed reservations cannot be reopened.
 - Tables with active future reservations cannot be disabled or reduced in capacity.
 - Deleting a table only disables it, so reservation history is kept.
 
-All reservation times follow the configured restaurant timezone. Creation timestamps are stored in UTC.
+### Time and timezone
+
+Asia/Manila (`RESTAURANT_ZONE`) is the only timezone that matters. "Today", the booking window, opening hours and availability are computed on the server from its clock in that zone; the browser takes them from `/api/info` and never uses the device clock or timezone to decide a date or time. Pages state the timezone next to times.
+
+Reservation times are stored as the UTC instant of the restaurant's wall-clock time, so changing the timezone setting of the computer running the app no longer moves existing bookings. No internet time service is used: the operating system's UTC clock does not depend on the timezone setting. Reservations saved by an earlier version are read correctly as long as the computer was set to Philippine time when they were saved.
+
+## Payments and refunds
+
+### What is implemented: manual GCash transfer
+
+No payment provider is connected. This project has no merchant account or API credentials, and a personal GCash number cannot receive API-confirmed payments, so the app never claims on its own that money arrived.
+
+1. The customer reserves. The server prices each table from the package list and stores that snapshot. Prices sent by a browser are ignored; a mismatching displayed total is rejected.
+2. The customer sends the total in their own GCash app to the configured number and submits the reference number, optionally with a receipt image (PNG, JPEG or WebP, up to 3 MB). The payment is **PENDING**.
+3. An administrator opens **Dashboard → Payments**, checks the transaction history of the receiving GCash account, ticks the attestation, and marks the payment **PAID**, or rejects it with a note so the customer can resubmit.
+4. Only then can the reservation be confirmed.
+
+The app never asks for or stores a GCash MPIN or OTP. A customer-entered reference number is treated as a claim, not proof, and the same reference cannot be pending or paid on two reservations.
+
+An unpaid reservation keeps its tables until staff cancel it; there is no automatic expiry.
+
+### Refunds
+
+Refunds are also manual. Cancelling tables before the cutoff makes their package price "owed" (only against verified payments). Under **Dashboard → Refunds** an administrator records a refund (amount and reason), sends it by hand in GCash, then records the refund's reference number. The app prevents more than one open refund per reservation, a refund reference being used twice, and refunds exceeding the verified payment minus earlier refunds. Every step is written to an append-only audit history shown in the reservation details.
+
+Payments migrated from the earlier classroom simulator are labelled as simulated and cannot be refunded, because no money was received.
+
+### Enabling automatic payment confirmation later
+
+This needs things outside the code:
+
+1. A registered business and a merchant account with a provider that offers GCash, for example PayMongo, Xendit or Maya Business, or GCash's own merchant programme. Check the provider's current requirements and fees.
+2. The provider's secret key and webhook signing secret, supplied as environment variables. Never commit them.
+3. A public HTTPS address for the provider's webhook.
+
+Then, in code: add a provider implementation behind `PaymentService` that creates a checkout for the reservation's amount due and redirects the customer; add a webhook endpoint that verifies the provider's signature and marks the payment PAID only from that verified event (never from the browser's return URL); call the provider's refund API from the refund flow and keep the manual flow as a fallback; and allow the new value in `PaymentSettings`, which currently rejects anything except `manual`.
 
 ## Backend Architecture and OOP Implementation
 
@@ -358,12 +406,12 @@ All endpoints are served under `/api`.
 |---|---|---|
 | GET | `/api/info` | Get restaurant information |
 | GET | `/api/availability?date=YYYY-MM-DD&guests=2` | Check available seating |
-| GET | `/api/availability/tables?date=YYYY-MM-DD&time=12:00&guests=2` | Check table availability |
+| GET | `/api/availability/tables?date=YYYY-MM-DD&time=12:00&guests=2&duration=120` | Tables with price, availability and the `suggested` automatic assignment |
 | GET | `/api/availability/dates?date=YYYY-MM-DD&guests=2` | Suggest other dates |
-| GET | `/api/deposit-policy` | Get the current deposit |
-| POST | `/api/reservations/demo-checkout` | Create reservation and verify simulated GCash payment |
-| POST | `/api/reservations` | Legacy unpaid request; use demo checkout for the normal flow |
-| POST | `/api/reservations/{id}/demo-payment` | Pay a staff-created booking in the demo |
+| GET | `/api/pricing` | Package prices, GCash payment instructions, cancellation terms |
+| POST | `/api/reservations` | Create a reservation (unpaid; priced by the server) |
+| POST | `/api/reservations/{id}/payments` | Submit a GCash reference and optional `proof` image (multipart); stays pending |
+| POST | `/api/reservations/{id}/cancel-tables` | Cancel selected tables, optionally reducing `guestCount` |
 | GET | `/api/reservations/my` | Get customer reservations |
 | GET | `/api/reservations/{id}` | Get reservation details |
 | PUT | `/api/reservations/{id}/cancel` | Cancel reservation |
@@ -386,7 +434,15 @@ All endpoints are served under `/api`.
 | POST | `/api/admin/customers/{id}/reservations` | Book for a customer |
 | PUT / DELETE | `/api/admin/reservations/{id}` | Edit or cancel a reservation |
 | POST | `/api/admin/layout` | Apply the 25-table layout when safe |
-| PUT | `/api/admin/deposit-policy` | Set the deposit amount |
+| PUT | `/api/admin/pricing/{capacity}` | Set the package price for a table size |
+| GET | `/api/admin/payments` | List payments (`?status=PENDING`) |
+| GET | `/api/admin/payments/{id}/proof` | View the receipt image |
+| PUT | `/api/admin/payments/{id}/review` | Mark paid (requires `verifiedAgainstAccount`) or reject |
+| GET | `/api/admin/refunds` and `/due` | Refund records, and reservations owed a refund |
+| POST | `/api/admin/reservations/{id}/refunds` | Record a refund to send |
+| PUT | `/api/admin/refunds/{id}/complete` and `/void` | Record the sent refund's reference, or void it |
+| POST | `/api/admin/reservations/{id}/cancel-tables` | Cancel selected tables as staff |
+| GET | `/api/admin/reservations/{id}/audit` | Payment, cancellation and refund history |
 | GET / PUT | `/api/admin/inquiries` and `/{id}/resolve` | Read and resolve inquiries |
 
 ### API Security
@@ -432,7 +488,14 @@ The automated tests cover:
 - Simultaneous reservation requests.
 - Flyway migrations and Hibernate schema validation.
 - Multi-table reservations, the 100-person limit, alternative dates, and layout replacement safeguards.
-- Per-person demo deposits, automatic payment verification, retry protection, and price-change rejection.
+- Timezone independence: stored times and "today" under different machine timezones.
+- Capacity: 100 guests across 25 tables, rejection of too few seats, concurrent large parties.
+- Overlap boundaries and lengths of stay, including a one-hour stay in a 30-minute gap.
+- Package pricing, price snapshots, rejection of client-supplied prices, retry protection.
+- Payment states (pending, paid, rejected, resubmitted), receipt image validation.
+- Partial cancellation, the cancellation cutoff, refund limits and the audit history.
+- Phone number normalization in registration, reservations, inquiries and admin forms.
+- Migration of deposit-era data into price lines, payments, refunds and +63 numbers.
 - Staff registration, customer access, inquiry storage, and preservation of existing bookings during upgrades.
 
 The tests use H2 in MySQL compatibility mode, which is not the same as testing on a real MySQL server. For that, use `.\run-backend.ps1 mysql-test`.
@@ -442,11 +505,11 @@ The tests use H2 in MySQL compatibility mode, which is not the same as testing o
 1. Register a new customer account.
 2. Log in as the customer.
 3. Pick a date and see available times.
-4. Select tables and complete the GCash demo checkout; check the total is ₱500 × guests.
+4. Click **Assign tables for me** (the assigned tables turn solid green), check the itemized total, reserve, and submit a GCash reference number.
 5. View it under **My reservations**.
 6. Cancel a reservation.
 7. Log in as the admin.
-8. Confirm a pending reservation whose demo deposit is verified.
+8. Under **Payments**, verify the payment, then confirm the reservation. Cancel one table of a multi-table booking and record its refund under **Refunds**.
 9. Add or edit a table.
 10. Search for a customer and view their history.
 

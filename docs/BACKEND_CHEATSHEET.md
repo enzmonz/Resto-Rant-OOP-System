@@ -1,5 +1,7 @@
 # Resto Rant backend cheatsheet
 
+> **Superseded in part.** The GCash demo checkout and the ₱500-per-person deposit described below were replaced by per-table package prices and a manual GCash transfer that staff verify (`PricingService`, `PaymentService`, `PaymentController`, migrations V4 and V5). See "Payments and refunds" in the root README for the current behaviour.
+
 ## Start and test
 
 From the project root in PowerShell:

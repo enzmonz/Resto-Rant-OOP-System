@@ -1,5 +1,7 @@
 # Backend presentation script
 
+> **Superseded in part.** The GCash demo checkout and the ₱500-per-person deposit described below were replaced by per-table package prices and a manual GCash transfer that staff verify (`PricingService`, `PaymentService`, `PaymentController`, migrations V4 and V5). See "Payments and refunds" in the root README for the current behaviour.
+
 **Target length:** about 7–9 minutes at a normal speaking pace. Read the quoted parts aloud; bracketed notes are cues for what to show. You can shorten sections if your class time is limited. The matching code examples are in [OOP_PRESENTATION_GUIDE.md](OOP_PRESENTATION_GUIDE.md).
 
 ## 1. Opening — about 45 seconds

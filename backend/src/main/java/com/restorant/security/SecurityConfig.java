@@ -30,8 +30,8 @@ public class SecurityConfig {
         return http.securityContext(c -> c.securityContextRepository(contexts))
             .csrf(c -> c.csrfTokenRepository(new HttpSessionCsrfTokenRepository()))
             .authorizeHttpRequests(a -> a
-                .requestMatchers("/", "/index.html", "/app.js", "/experience.js", "/style.css", "/assets/**", "/error",
-                    "/api/auth/csrf", "/api/auth/register", "/api/auth/login", "/api/info", "/api/availability/**", "/api/deposit-policy", "/api/inquiries").permitAll()
+                .requestMatchers("/", "/index.html", "/app.js", "/experience.js", "/menu.js", "/style.css", "/assets/**", "/error",
+                    "/api/auth/csrf", "/api/auth/register", "/api/auth/login", "/api/info", "/api/availability/**", "/api/pricing", "/api/inquiries").permitAll()
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 .requestMatchers("/api/reservations/**").hasRole("CUSTOMER")
                 .anyRequest().authenticated())

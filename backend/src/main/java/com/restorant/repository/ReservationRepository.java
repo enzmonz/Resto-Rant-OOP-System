@@ -4,7 +4,7 @@ import java.time.LocalDateTime;
 import java.util.*;
 import org.springframework.data.jpa.repository.*;
 public interface ReservationRepository extends JpaRepository<Reservation, Long> {
-    Optional<Reservation> findByPaymentReference(String reference);
+    Optional<Reservation> findByClientRequestId(String requestId);
     @EntityGraph(attributePaths = {"customer", "table"})
     List<Reservation> findAllByOrderByStartsAtDesc();
     @EntityGraph(attributePaths = {"customer", "table"})
@@ -13,6 +13,8 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
     long overlaps(Long tableId, LocalDateTime start, LocalDateTime end, Collection<Reservation.Status> statuses);
     @Query("select (count(r)>0) from Reservation r join r.assignedTables t where t.id=:tableId and r.endsAt>:now and r.status in :statuses")
     boolean existsByTableIdAndEndsAtAfterAndStatusIn(Long tableId, LocalDateTime now, Collection<Reservation.Status> statuses);
+    /** Active reservations whose half-open interval [startsAt, endsAt) intersects [start, end). */
+    @EntityGraph(attributePaths = {"assignedTables"})
     @Query("select distinct r from Reservation r where r.status in :statuses and r.startsAt < :end and r.endsAt > :start")
     List<Reservation> activeDuring(LocalDateTime start,LocalDateTime end,Collection<Reservation.Status> statuses);
 }
