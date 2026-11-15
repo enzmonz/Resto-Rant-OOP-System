@@ -526,6 +526,10 @@ The app is created at `backend/target/resto-rant-0.0.1-SNAPSHOT.jar` and can be 
 java -jar backend/target/resto-rant-0.0.1-SNAPSHOT.jar --spring.profiles.active=demo
 ```
 
+## Deploy
+
+See [the Cloudflare deployment guide](docs/DEPLOYMENT.md) for Cloudflare Containers, managed MySQL, secrets, and a custom domain.
+
 ## License
 
 No license has been chosen yet.
