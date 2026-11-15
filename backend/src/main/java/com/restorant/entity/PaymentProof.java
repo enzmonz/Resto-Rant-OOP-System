@@ -7,7 +7,8 @@ import jakarta.persistence.*;
 public class PaymentProof {
     @Id private Long paymentId;
     @Column(nullable = false, length = 50) private String contentType;
-    @Lob @Column(nullable = false) private byte[] data;
+    // The length makes Hibernate expect MySQL's LONGBLOB, which is what migration V4 creates (default would be TINYBLOB).
+    @Lob @Column(nullable = false, length = 33554432) private byte[] data;
     protected PaymentProof() {}
     public PaymentProof(Long paymentId, String contentType, byte[] data) { this.paymentId = paymentId; this.contentType = contentType; this.data = data; }
     public String getContentType() { return contentType; }

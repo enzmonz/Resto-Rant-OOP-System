@@ -1,0 +1,11 @@
+.git
+.tools
+.vscode
+.claude
+**/target
+backend/.local
+**/*.log
+.env
+.env.*
+docs
+database

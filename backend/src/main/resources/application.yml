@@ -37,7 +37,10 @@ server:
         http-only: true
         same-site: lax
         secure: ${COOKIE_SECURE:false}
-  port: ${SERVER_PORT:8080}
+  # Hosts such as Render and Railway provide PORT; locally the default is 8080.
+  port: ${SERVER_PORT:${PORT:8080}}
+  # Behind Cloudflare and the host's proxy, trust X-Forwarded-* headers so the app sees HTTPS and the real client address.
+  forward-headers-strategy: ${FORWARD_HEADERS:native}
   error:
     include-message: never
     include-stacktrace: never
