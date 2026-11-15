@@ -52,12 +52,21 @@ try {
         'run' { & $maven @mavenArgs spring-boot:run }
         'demo' {
             if (-not $env:SEED_ADMIN_PASSWORD) {
-                $credential = Get-Credential -UserName 'admin@restorant.local' -Message 'Set the admin login (password: at least 10 characters). Only used the first time; press Cancel if the admin account already exists.'
-                if ($credential) {
-                    $env:SEED_ADMIN_PASSWORD = $credential.GetNetworkCredential().Password
-                    $env:SEED_ADMIN_EMAIL = $credential.UserName
-                } else {
+                Write-Host 'Set the initial admin login in this window. It is only created if the email does not already exist.'
+                $adminEmail = Read-Host 'Admin email (leave blank to skip if the account already exists)'
+                if ([string]::IsNullOrWhiteSpace($adminEmail)) {
                     Write-Host 'No admin password given. Starting without creating an admin account.' -ForegroundColor Yellow
+                } else {
+                    $securePassword = Read-Host 'Admin password (at least 10 characters)' -AsSecureString
+                    $passwordPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($securePassword)
+                    try {
+                        $adminPassword = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($passwordPointer)
+                    } finally {
+                        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($passwordPointer)
+                    }
+                    if ($adminPassword.Length -lt 10) { throw 'Admin password must be at least 10 characters.' }
+                    $env:SEED_ADMIN_EMAIL = $adminEmail.Trim()
+                    $env:SEED_ADMIN_PASSWORD = $adminPassword
                 }
             }
             & $maven @mavenArgs '-Dspring-boot.run.profiles=demo' spring-boot:run
